@@ -4,63 +4,68 @@ import sys
 import codecs
 from PyPDF2 import PdfFileReader, PdfFileWriter, PdfFileMerger
 
-title = 'title'
-in_path = 'C:\\Users\\demon\\Pictures\\ControlCenter3\\Scan\\'
-out_path = 'C:\\Users\\demon\\Pictures\\ControlCenter3\\output\\'
+root = os.path.dirname(__file__)
+data_dir = os.path.join(root, "pdf_folder")
+rotate_temp_dir = os.path.join(data_dir, "rotate")
+output_file = os.path.join(data_dir, "000_total.pdf")
 
-inDir = in_path + title
-outDir = out_path + title
+if os.path.exists(output_file):
+    os.remove(output_file)
 
-
-# 回転
-for dir_path, dir_names, file_names in os.walk(inDir):
-    for file_name in file_names:
-        path = os.path.join(dir_path, file_name)
-        outpath = os.path.join(outDir, file_name)
-
-        pdf_file_obj = open(path, 'rb')
-        pdf_reader = PyPDF2.PdfFileReader(pdf_file_obj)
-        page = pdf_reader.getPage(0)
-        page.rotateCounterClockwise(90)
- 
-        pdf_writer = PyPDF2.PdfFileWriter()
-        pdf_writer.addPage(page)
- 
-        pdf_output_file = open(outpath, 'wb')
-        pdf_writer.write(pdf_output_file)
-        pdf_output_file.close()
-        pdf_file_obj.close()
-        print('转换前文件%s'%(path))
-        print('转换后文件%s'%(outpath))
+filelist = (
+             ("00_0AAA.pdf",0)
+            ,("01-1BBB.pdf",0)
+            ,("02-1CCC.pdf",0)
+        )
 
 
-# ファイル一覧取得
-filelist_out = []
-for fpath, dirs, fs in os.walk(outDir):
-    for f in fs:
-        fi_d = os.path.join(fpath, f)
-        if  os.path.splitext(fi_d)[1] == '.pdf':
-            filelist_out.append(fi_d)
-        else:
-            pass
-
-# マージ
 merger = PdfFileMerger()
-filelist = filelist_out
-if len(filelist) == 0:
-    print("当前目录及子目录下不存在pdf文件")
-    sys.exit()
-for filename in filelist:
-    f = codecs.open(filename, 'rb')
-    file_rd = PdfFileReader(f)
-    short_filename = os.path.basename(os.path.splitext(filename)[0])
-    if file_rd.isEncrypted == True:
-        print('不支持的加密文件：%s'%(filename))
+
+for filename , rotate in filelist:
+    print(filename, "処理開始！")
+    input_file_org = os.path.join(data_dir, filename)
+    input_file_merge = input_file_org
+    
+    # ページ回転必要な場合
+    if rotate != 0:
+        print(filename, "回転", rotate, "度")
+        pdf_rotate_output_path = os.path.join(rotate_temp_dir, filename)
+        if os.path.exists(pdf_rotate_output_path):
+            os.remove(pdf_rotate_output_path)
+        
+        pdf_rotate_file_object = open(input_file_org, 'rb')
+        pdf_rotate_reader = PyPDF2.PdfFileReader(pdf_rotate_file_object)
+        num_of_pages = pdf_rotate_reader.getNumPages()
+
+        pdf_rotate_output_object = open(pdf_rotate_output_path, 'wb')
+        pdf_rotate_write = PyPDF2.PdfFileWriter()
+        
+        for p in range(num_of_pages):
+            page = pdf_rotate_reader.getPage(p)
+            page.rotateCounterClockwise(rotate)
+            pdf_rotate_write.addPage(page)
+        
+        pdf_rotate_write.write(pdf_rotate_output_object)
+
+        pdf_rotate_file_object.close()
+        pdf_rotate_output_object.close()
+
+        input_file_merge = pdf_rotate_output_path
+    # ページ回転処理終了
+    
+    if os.path.exists(input_file_merge) == False:
+        print(input_file_merge, "が存在していない")
         continue
-    merger.append(file_rd, bookmark=short_filename, import_bookmarks=True)
-    print('合并文件：%s'%(filename))
-    f.close()
-out_filename=os.path.join(os.path.abspath(outDir), (title+".pdf"))
-merger.write(out_filename)
-print('合并后的输出文件：%s'%(out_filename))
+    merger_file = codecs.open(input_file_merge, 'rb')
+    merger_object = PdfFileReader(merger_file)
+    if merger_object.isEncrypted == True:
+        print(merger_object, "が暗号化されているため、マージできない")
+        merger_file.close()
+        continue
+    merger.append(merger_object, bookmark=filename.replace(".pdf", ""), import_bookmarks=True)
+    merger_file.close()
+
+merger.write(output_file)
 merger.close()
+print("マージ処理完了しました。")
+
